@@ -17,7 +17,7 @@
 
 ### Configure Tokens
 
-You need to change PRODUCT_ID, PHONE_ID and API_KEY values in app.js file. You can find your Product ID and Token in [Settings Token Page](https://console.maytapi.com/settings/token). Phone Id can be found in [Phones Page](https://console.maytapi.com/) or with `/listPhones` endpoint.
+You need to change PRODUCT_ID, PHONE_ID and API_TOKEN values in app.js file. You can find your Product ID and Token in [Settings Token Page](https://console.maytapi.com/settings/token). Phone Id can be found in [Phones Page](https://console.maytapi.com/) or with `/listPhones` endpoint.
 
 # Start The Api
 
