@@ -25,4 +25,4 @@ Tested with nodejs v10.15.0
 
 `npm start`
 
-Now you can try the bot sending test messages to your number.
+Now you can try the bot with sending test messages to your connected number.
