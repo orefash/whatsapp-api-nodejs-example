@@ -1,53 +1,57 @@
 const express = require('express');
-const ngrok = require('ngrok');
-const rp = require('request-promise-native');
+const bodyParser = require('body-parser');
+
+
+var { get_sessions, clean_db, reset_convo, del_up_table, check_order } = require("./dbhelper.js");
+var { build_food_menu, handle_msgs } = require("./chat_ops.js");
+var { setup_network, send_message } = require("./utils.js");
 
 const app = express();
+
 const port = 3000;
 
-app.use(express.json());
 
-const INSTANCE_URL = 'https://api.maytapi.com/api';
-const PRODUCT_ID = '';
-const PHONE_ID = '';
-const API_TOKEN = '';
+app.use(bodyParser.json());      
+app.use(bodyParser.urlencoded({extended: true}));
+app.use(express.static("public"));
 
-if (!PRODUCT_ID || !PHONE_ID || !API_TOKEN) throw Error('You need to change PRODUCT_ID, PHONE_ID and API_KEY values in app.js file.');
-
-async function send_message(body) {
-	console.log(`Request Body:${JSON.stringify(body)}`);
-	let url = `${INSTANCE_URL}/${PRODUCT_ID}/${PHONE_ID}/sendMessage`;
-	let response = await rp(url, {
-		method: 'post',
-		json: true,
-		body,
-		headers: {
-			'Content-Type': 'application/json',
-			'x-maytapi-key': API_TOKEN,
-		},
-	});
-	console.log(`Response: ${JSON.stringify(response)}`);
-	return response;
-}
-
-async function setup_network() {
-	let public_url = await ngrok.connect(3000);
-	console.log(`Public Url:${public_url}`);
-	let webhook_url = `${public_url}/webhook`;
-	let url = `${INSTANCE_URL}/${PRODUCT_ID}/setWebhook`;
-	let response = await rp(url, {
-		method: 'POST',
-		body: { webhook: webhook_url },
-		headers: {
-			'x-maytapi-key': API_TOKEN,
-			'Content-Type': 'application/json',
-		},
-		json: true,
-	});
-	console.log(`Response: ${JSON.stringify(response)}`);
-}
+app.engine("html", require("ejs").renderFile);
 
 app.get('/', (req, res) => res.send('Hello World!'));
+
+app.get('/payment', (req, res) => {
+
+	res.render('payment.html');
+
+});
+
+
+app.get('/test', async (req, res) => {
+
+	let data = await get_sessions();
+	console.log("DB get: ", data);
+
+	res.send('payment.html');
+
+});
+
+app.get("/formatable", (request, response) => {
+	
+	clean_db();
+  
+	response.send(JSON.stringify("DOne"));
+});
+
+
+app.get("/drop_table", (request, response) => {
+	
+	del_up_table();
+  
+	response.send(JSON.stringify("DOne"));
+});
+
+
+
 
 app.post('/sendMessage', async (req, res) => {
 	let { message, to_number } = req.body;
@@ -56,7 +60,10 @@ app.post('/sendMessage', async (req, res) => {
 });
 
 app.post('/webhook', async (req, res) => {
+	
 	res.sendStatus(200);
+
+	// console.log("Req body: ", req.body);
 	let { message, conversation } = req.body;
 	let { type, text, fromMe } = message;
 	if (fromMe) return;
@@ -64,32 +71,61 @@ app.post('/webhook', async (req, res) => {
 		let body = {};
 		let lower = text.toLowerCase();
 		switch (lower) {
-			case 'image':
+			case 'reset':
+				await reset_convo();
+
+				
 				body = {
-					type: 'media',
-					text: 'Image Response',
-					message: 'http://placehold.it/180',
+					message: 'Chat Reset',
+					type: 'text' 
 				};
+
+				body.to_number = conversation;
+				await send_message(body);
+
 				break;
-			case 'location':
+
+			case '1':
+			case 'menu':
+			case 'order food':
+			case 'order':
+
+				await check_order(conversation);
+
 				body = {
-					type: 'location',
-					text: 'Echo - ' + text,
-					latitude: '41.093292',
-					longitude: '29.061737',
+					message: await build_food_menu(conversation),
+					type: 'text' 
 				};
+
+				body.to_number = conversation;
+				await send_message(body);
+
 				break;
 			default:
 				body = { message: 'Echo - ' + text, type: 'text' };
+
+				try {
+					await handle_msgs(conversation, text);					
+					
+				} catch (error) {
+					console.log("In cse: ", error);
+				}
 		}
-		body.to_number = conversation;
-		await send_message(body);
+
+
 	} else {
 		console.log(`Ignored Message Type:${type}`);
 	}
 });
 
+
 app.listen(port, async () => {
 	console.log(`Example app listening at http://localhost:${port}`);
 	await setup_network();
 });
+
+
+
+  
+
+
