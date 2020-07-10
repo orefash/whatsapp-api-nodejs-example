@@ -35,16 +35,18 @@ db.serialize(() => {
 		  );
 	  
 	  
-		  db.run(
+		db.run(
 			"CREATE TABLE IF NOT exists order_items (" +
 			  "oitem_id INTEGER PRIMARY KEY AUTOINCREMENT," +
 			  "order_id varchar(30) NOT NULL," +
 			  "item_id int(11)," +
 			  "item varchar(30)," +
+			  "price decimal(10,2) DEFAULT NULL," +
 			  "quantity int(11) DEFAULT NULL," +
+			  "status varchar(10)," +
 			  "FOREIGN KEY (order_id) REFERENCES userorders (order_id) "+			
 			")"
-		  );
+		);
 	  
 		  db.run(
 			"CREATE TABLE IF NOT exists user_session (" +
@@ -150,7 +152,22 @@ async function check_order(conversation){
 
 }
 
-async function add_item(params){
+async function add_item(params, oid){
+
+	console.log("Params: ", params);
+	
+	await db.run(`insert into order_items (order_id, item_id, item, price, quantity, status) values ('${oid}', '${params.code}', '${params.item}', ${params.price}, ${params.quantity}, 'check')`);
+
+
+}
+
+await function fetch_orders(oid) {
+
+	let orders = await db.get(`SELECT * FROM order_items WHERE order_id = '${oid}' `);
+
+	console.log("Ypur orders: ", orders);
+
+	return orders;
 
 }
 
@@ -165,5 +182,6 @@ module.exports = {
 	init_order: init_order,
 	get_session: get_session,
 	check_order: check_order,
-	add_item: add_item
+	add_item: add_item,
+	fetch_orders: fetch_orders
 }

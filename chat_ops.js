@@ -16,11 +16,13 @@ async function check_item(item){
 
     console.log("Check item");
 
+    item = item.toLowerCase();
+
     var selected =  our_menu.filter(function(menu) {
-        return menu.item == item || menu.code == item;
+        return menu.item.toLowerCase() == item || menu.code.toLowerCase() == item;
     });
 
-    console.log("selected item: ", selected[0]);
+    // console.log("selected item: ", selected[0]);
 
     return selected;
 
@@ -60,7 +62,96 @@ async function build_food_menu(conversation){
 	return menu_string;
 };
 
+async function verify_order(text){
 
+    let orders =  text.split(',');
+    console.log("Orders: ", orders);
+
+    let ver_orders = [];
+        
+    for(var i=0; i< orders.length; i++){
+
+        let order = orders[i].trim();
+        // console.log("Order: ", order);
+
+       	let order_obj = [];
+        let order_item = order.split(" ");
+                
+                
+        // console.log("order item: ", order_item);
+        if(order_item.length >= 2){
+
+            var p1 = order_item[0].trim();
+            var p2 = order_item[1].trim();
+
+            if(order_item.length>2){
+
+                // console.log("TEst split if > 2: ", order.split(p1) );
+              p2 = order.split(p1)[1].trim();
+            }
+            
+
+            let quantity = 0;
+            let item = "";
+
+            if(isNaN(p1)){
+                if(isNaN(p2)){
+                    continue;
+                }else{
+                    quantity = p2;
+                    item = p1;
+                }
+
+            }else{
+                quantity = p1;
+                item = p2;
+            }
+
+            let selected = await check_item(item);
+
+            console.log("Selected: ", selected);
+
+            if(selected.length>0){
+                let sl = selected[0];
+                sl.quantity = quantity;
+                ver_orders.push(sl);       
+                        
+
+            }
+
+        }
+    }
+
+
+    return ver_orders;
+}
+
+async function show_home(conversation) {
+    let session = await get_session(conversation);
+
+    if(session){
+
+        let body = {
+            message: await get_menu(session.uname),
+            type: 'text' 
+        };
+    
+        console.log("After body in get name: ", body);
+        body.to_number = conversation;
+        await send_message(body);
+
+    }else{
+
+        init_session(conversation);
+        let body = { message: "Welcome to our restaurant. What is your name?", type: 'text' };
+
+		console.log("In init: ",body);
+		
+		body.to_number = conversation;
+		await send_message(body);
+
+    }
+}
 
 async function handle_msgs(conversation, text){
 
@@ -94,75 +185,26 @@ async function handle_msgs(conversation, text){
 
             console.log("in place order");
         
-            var query = `update user_session set c_step = 'none' where pid= '${conversation}' `;
+            let v_orders = await verify_order(text);
+
+            console.log("Verified Orders: ", v_orders);
+
+            if(v_orders.length>0){
+                text = "You selected;\n\n";
+
+                for(var i=0; i<v_orders.length; i++){
+                    // console.log("Vd: ",v_orders[]);
+                    await add_item(v_orders[i], session.oid);
+                    text += ` ${v_orders[i].quantity} X ${v_orders[i].item} - N${v_orders[i].price * v_orders[i].quantity}\n\n`;
+                }
+
+                text += "Is your order list correct? Type *Yes* to add to your cart and *No* to retake the order. To return to the main menu type 0";
+
+                var query = `update user_session set c_step = 'CHECK_ENTRY' where pid= '${conversation}' `;
         
-            tdb.run(query);
-        
-            let order_string = [];
-        
-            let orders =  text.split(',');
-            console.log("Orders: ", orders);
-
-            let valid_cnt = 0;
-        
-            for(var i=0; i< orders.length; i++){
-
-                let order = orders[i].trim();
-                console.log("Order: ", order);
-
-            	let order_obj = [];
-                let order_item = order.split(" ");
-               
-                
-                
-                console.log("order item: ", order_item);
-            	if(order_item.length >= 2){
-
-
-                    if(order_item.length>2){
-
-                        for(var i=2; i<order_item.length; i++){
-                            order_item[1]+=" "+order_item[i];
-                        }
-                        // order_item.length = 2;
-                    }
-        
-                    var p1 = order_item[0].trim();
-                    var p2 = order_item[1].trim();
-
-                    let quantity = 0;
-                    let item = "";
-
-                    if(isNaN(p1)){
-                        if(isNaN(p2)){
-                            continue;
-                        }else{
-                            quantity = p2;
-                            item = p1;
-                        }
-
-                    }else{
-                        quantity = p1;
-                        item = p2;
-                    }
-
-                    let selected = await check_item(item);
-
-                    if(selected){
-                        selected.quantity = quantity;
-                        selected.oid = session.oid;
-
-                        add_item(selected);
-                        valid_cnt++;
-                        
-
-                    }else{
-                        // continue;
-                    }
-
-
-
-            	}
+                tdb.run(query);
+            }else{
+                text = "Didn't get your order correctly, please retake your order";
             }
         
         
@@ -176,6 +218,43 @@ async function handle_msgs(conversation, text){
             body.to_number = conversation;
             await send_message(body);
         
+        }else if(step === 'CHECK_ENTRY'){
+
+            let choice = text.toLowerCase();
+            let oid = session.oid;
+
+            switch (choice) {
+
+                case 'yes':
+                case 'y':
+
+                    var query = `update order_items set status = 'set' where status= 'check' `;
+                    tdb.run(query);
+
+                    
+
+                    break;
+                case 'no':
+                case 'n':
+        
+        
+                    break;
+                default:
+                    text = "Please type *Yes* to add to your cart and *No* to retake the order. To return to the main menu type 0";
+
+                    let body = {
+                        message: text,
+                        type: 'text' 
+                    };
+                
+                    console.log("After body: ", body);
+                    
+                    body.to_number = conversation;
+                    await send_message(body);
+
+
+            }
+
         }
 
 
@@ -192,92 +271,6 @@ async function handle_msgs(conversation, text){
 		await send_message(body);
     }
     
-
-   
-
-	// db.all(
-	// 	`SELECT * FROM user_session WHERE pid = '${conversation}' `, 
-	// 	async function (err, rows) {
-			
-	// 		console.log("Rows: ", rows[0]);
-
-	// 		if(rows.length>0){
-
-	// 			let step = rows[0].c_step;
-
-
-	// 			if(step === 'GET_NAME'){
-
-	// 				console.log("in get name");
-
-	// 				var query = `update user_session set c_step = 'none' where pid= '${conversation}' `;
-
-	// 				db.run(query);
-
-	// 				let body = {
-	// 					message: 
-	// 					await get_menu(text),
-	// 					type: 'text' 
-	// 				};
-
-	// 				console.log("After body: ", body);
-	// 				// cb(body);
-	// 				body.to_number = conversation;
-	// 				await send_message(body);
-		
-	// 			}
-
-	// 		}else if(step === 'Place_Order'){
-
-	// 			console.log("in place order");
-
-	// 				var query = `update user_session set c_step = 'none' where pid= '${conversation}' `;
-
-	// 				db.run(query);
-
-	// 				let order_string = [];
-
-	// 				let orders =  text.split(",");
-
-	// 				for(order in orders){
-	// 					let order_obj = {};
-	// 					let order_item = order.split(" ", 2);
-	// 					if(order_item.length == 2){
-
-	// 					}
-	// 				}
-
-
-	// 				let body = {
-	// 					message: 
-	// 					await get_menu(text),
-	// 					type: 'text' 
-	// 				};
-
-	// 				console.log("After body: ", body);
-	// 				// cb(body);
-	// 				body.to_number = conversation;
-	// 				await send_message(body);
-
-	// 		}else{
-	// 			console.log("Init");
-				
-	// 			let oid = await createOid();
-	// 			console.log("OID: ", oid);
-	// 			 db.run(`insert into user_session values ('${conversation}', 'GET_NAME', '', '${oid}', 1)`);
-	// 			let body = { message: "Welcome to our restaurant. What is your name?", type: 'text' };
-
-	// 			console.log("In init: ",body);
-	// 			// cb(body);
-	// 			body.to_number = conversation;
-	// 			await send_message(body);
-	// 		}
-
-			
-
-	// 	}
-	// );
-
 }
 
 
@@ -285,5 +278,7 @@ module.exports = {
 	
     build_food_menu: build_food_menu,
     get_menu: get_menu,
-    handle_msgs: handle_msgs
+    handle_msgs: handle_msgs,
+    verify_order: verify_order,
+    show_home: show_home
 }

@@ -3,7 +3,7 @@ const bodyParser = require('body-parser');
 
 
 var { get_sessions, clean_db, reset_convo, del_up_table, check_order } = require("./dbhelper.js");
-var { build_food_menu, handle_msgs } = require("./chat_ops.js");
+var { build_food_menu, show_home, handle_msgs, verify_order } = require("./chat_ops.js");
 var { setup_network, send_message } = require("./utils.js");
 
 const app = express();
@@ -52,6 +52,14 @@ app.get("/drop_table", (request, response) => {
 
 
 
+app.get("/vtest", (request, response) => {
+	
+	var txt = "1 Jollof Rice, 2 BBQ Chicken, 1 FR";
+	verify_order(txt);
+  
+	response.send(JSON.stringify(txt));
+});
+
 
 app.post('/sendMessage', async (req, res) => {
 	let { message, to_number } = req.body;
@@ -82,6 +90,12 @@ app.post('/webhook', async (req, res) => {
 
 				body.to_number = conversation;
 				await send_message(body);
+
+				break;
+
+			case '0':
+			case 'home':
+				await show_home(conversation);
 
 				break;
 
