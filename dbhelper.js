@@ -26,8 +26,10 @@ db.serialize(() => {
 			  "name varchar(30) NOT NULL," +
 			  "email varchar(50) DEFAULT NULL," +
 			  "phone varchar(15) DEFAULT NULL," +
+			  "uid varchar(15) DEFAULT NULL," +
 			  "address text," +
 			  "total_price decimal(10,2) DEFAULT NULL," +
+			  "dtype varchar(30) DEFAULT NULL," +
 			  "status varchar(30) DEFAULT NULL," +
 			  "order_info text," +
 			  "PRIMARY KEY (order_id)" +
@@ -122,13 +124,13 @@ async function init_session(conversation){
 }
 
 async function init_order(params){
-	console.log("Init");
+	console.log("Init order: ", params);
 				
 	let oid = params.oid;
-	let name = params.uname;
+	let name = params.name;
 	let phone = params.phone;
 	console.log("OID: ", oid);
-	await db.run(`insert into c_orders values ('${oid}', '', '${name}', '', '${phone}', '', 0, 'incomplete', '')`);
+	await db.run(`insert into c_orders values ('${oid}', '', '${name}', '', '${phone}','${phone}', '', 0,'', 'incomplete', '')`);
 }
 
 async function check_order(conversation){
@@ -161,11 +163,41 @@ async function add_item(params, oid){
 
 }
 
-await function fetch_orders(oid) {
+async function fetch_orders(oid) {
 
-	let orders = await db.get(`SELECT * FROM order_items WHERE order_id = '${oid}' `);
+	// let orders = await db.all(`SELECT * FROM order_items `);
+	let orders = await db.all(`SELECT * FROM order_items WHERE order_id = '${oid}' and status = 'set' `);
 
-	console.log("Ypur orders: ", orders);
+	console.log("Your set orders: ", orders);
+
+	return orders;
+
+}
+
+async function update_order(params){
+
+	var query = `update c_orders set name='${params.name}', phone='${params.phone}', address='${params.address}', email='${params.email}' where order_id='${params.oid}' `
+	console.log("Update uorder QUery: ", query);
+
+	await db.run(query);
+
+}
+
+async function set_order(oid){
+
+	var query = `update c_orders set status = 'complete' where order_id='${oid}' `;
+	console.log("Update uorder QUery: ", query);
+
+	await db.run(query);
+
+}
+
+
+async function fetch_order_info(oid) {
+
+	let orders = await db.get(`SELECT * FROM c_orders WHERE order_id = '${oid}'`);
+
+	console.log("Your order info: ", orders);
 
 	return orders;
 
@@ -183,5 +215,8 @@ module.exports = {
 	get_session: get_session,
 	check_order: check_order,
 	add_item: add_item,
-	fetch_orders: fetch_orders
+	fetch_orders: fetch_orders,
+	fetch_order_info: fetch_order_info,
+	update_order: update_order,
+	set_order: set_order
 }

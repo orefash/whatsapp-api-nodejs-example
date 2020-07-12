@@ -1,5 +1,5 @@
 
-var {  tdb, init_session, get_session, add_item } = require("./dbhelper.js");
+var {  tdb, init_session, get_session, add_item, fetch_orders    } = require("./dbhelper.js");
 var { send_message } = require("./utils.js");
 
 
@@ -32,7 +32,7 @@ async function check_item(item){
 async function get_menu(name) {
 
 	let menu_string = `
-		Hello ${name}, Here is a list of things you can do;\n\n 1. Order Food\n 2. Give Feedback
+		Hello ${name}, Here is a list of things you can do;\n\n *Order* Food
 	`;
 
 	console.log("Main menu: ", menu_string);
@@ -43,15 +43,18 @@ async function get_menu(name) {
 
 async function build_food_menu(conversation){
 
-	let menu_string = "Our Menu\n";
+     
+
+	let menu_string = "Our Menu 🍲\n";
 
 	for(var i=1; i<=our_menu.length; i++){
 		let food = our_menu[i-1];
 		menu_string += `${food.item}   N${food.price}   (Code: ${food.code})\n`;
 	}
-
+     
 	menu_string += "\nTo select items from the menu, reply with quantity and item code/name, separate each with a comma(,)\n\n";
-	menu_string += "*E.g. 1 Jollof Rice, 2 FC, 1 BBQ Chicken*";
+    menu_string += "*E.g. 1 Jollof Rice, 2 FC, 1 BBQ Chicken*";
+    menu_string += "\n\nType *home* to see the main menu";
 
 	console.log("Food:\n", menu_string);
 
@@ -143,7 +146,7 @@ async function show_home(conversation) {
     }else{
 
         init_session(conversation);
-        let body = { message: "Welcome to our restaurant. What is your name?", type: 'text' };
+        let body = { message: "Welcome to our restaurant 🙂 \n\nWhat is your name?", type: 'text' };
 
 		console.log("In init: ",body);
 		
@@ -170,7 +173,7 @@ async function handle_msgs(conversation, text){
             console.log("in get name");
         
             var query = `update user_session set c_step = 'none', uname = '${text}' where pid= '${conversation}' `;
-            tdb.run(query);
+            await tdb.run(query);
         
             let body = {
             	message: await get_menu(text),
@@ -202,7 +205,7 @@ async function handle_msgs(conversation, text){
 
                 var query = `update user_session set c_step = 'CHECK_ENTRY' where pid= '${conversation}' `;
         
-                tdb.run(query);
+                await tdb.run(query);
             }else{
                 text = "Didn't get your order correctly, please retake your order";
             }
@@ -228,19 +231,43 @@ async function handle_msgs(conversation, text){
                 case 'yes':
                 case 'y':
 
+                    console.log("Inn ");
+
                     var query = `update order_items set status = 'set' where status= 'check' `;
-                    tdb.run(query);
+                    await tdb.run(query);
 
-                    
+                    var orders = await fetch_orders(oid);
 
-                    break;
-                case 'no':
-                case 'n':
-        
-        
-                    break;
-                default:
-                    text = "Please type *Yes* to add to your cart and *No* to retake the order. To return to the main menu type 0";
+                    console.log("The orders: ", orders.length);
+
+                    if(orders.length > 0){
+ 
+                        text = "Your Cart 🙂; \n\n";
+                        let tprice = 0;
+
+                        // console.log("")
+                        for(var i=0; i< orders.length; i++){
+
+                            let oitem = orders[i];
+                            var price = oitem.price * oitem.quantity;
+                            tprice += price;
+                            text += `${i+1}. ${oitem.quantity} X ${oitem.item} - N${price}\n`;
+
+                        }
+
+                         
+                        text += `\nOrder Total: N${tprice} \n`;
+
+                        var qry = `update c_orders set total_price = ${tprice} where order_id = '${oid}' `;
+                        await tdb.run(qry);
+
+                        text += "\n Reply with *checkout* to complete your order. Type *menu* to add more items or *clear* to clear your cart. . To return to the main menu type *home*";
+
+                    }else{
+
+                        text = "There are no items in your cart 😢 \n\n Type *menu* to take your order. To return to the main menu type *home*";
+
+                    }
 
                     let body = {
                         message: text,
@@ -251,6 +278,41 @@ async function handle_msgs(conversation, text){
                     
                     body.to_number = conversation;
                     await send_message(body);
+
+                    break;
+                case 'no':
+                case 'n':
+
+                    var query = `delete from order_items where status= 'check' `;
+                    await tdb.run(query);
+                   
+        
+                    text = await build_food_menu(conversation);
+
+                    var by = {
+                        message: text,
+                        type: 'text' 
+                    };
+                
+                    console.log("After body: ", by);
+                    
+                    by.to_number = conversation;
+                    await send_message(by);
+
+        
+                    break;
+                default:
+                    text = "Please type *Yes* to add to your cart or *No* to retake the order. To return to the main menu type *home*";
+
+                    var bd = {
+                        message: text,
+                        type: 'text' 
+                    };
+                
+                    console.log("After body: ", bd);
+                    
+                    bd.to_number = conversation;
+                    await send_message(bd);
 
 
             }
@@ -263,7 +325,7 @@ async function handle_msgs(conversation, text){
 
         console.log("session: not found ");
         init_session(conversation);
-        let body = { message: "Welcome to our restaurant. What is your name?", type: 'text' };
+        let body = { message: "Welcome to our restaurant 😃\n What is your name?", type: 'text' };
 
 		console.log("In init: ",body);
 		

@@ -2,9 +2,12 @@ const express = require('express');
 const bodyParser = require('body-parser');
 
 
-var { get_sessions, clean_db, reset_convo, del_up_table, check_order } = require("./dbhelper.js");
+var { get_sessions, clean_db, reset_convo, del_up_table, check_order, fetch_orders, fetch_order_info, update_order } = require("./dbhelper.js");
 var { build_food_menu, show_home, handle_msgs, verify_order } = require("./chat_ops.js");
 var { setup_network, send_message } = require("./utils.js");
+var { init_checkout, finish_order } = require("./checkout_handler.js");
+var { PAYSTACK_KEY } = require("./config.js");
+
 
 const app = express();
 
@@ -15,15 +18,61 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static("public"));
 
-app.engine("html", require("ejs").renderFile);
+// app.engine("html", require("ejs").renderFile);
+app.set('view engine', 'ejs');
 
 app.get('/', (req, res) => res.send('Hello World!'));
 
-app.get('/payment', (req, res) => {
 
-	res.render('payment.html');
+
+app.post('/update-order', async (req, res) => {
+
+	await update_order(req.body);
+
+	res.status(200).json({
+        message: 'Order Updated'
+    });
 
 });
+
+
+app.post('/finish-order', async (req, res) => {
+
+	console.log("In finsih order req: ",req.body);
+
+	// var oid = req.body.oid;
+	// var address = req.body.address;
+	// var email = req.body.email;
+	// var phone = req.body.phone;
+	// var name = req.body.name;
+
+	await finish_order(req.body);
+
+	res.status(200).json({
+        message: 'Order COmpleted'
+    });
+
+});
+
+app.get('/checkout/:oid', async (req, res) => {
+
+	var oid = req.params.oid;
+	var orders = await fetch_orders(oid);
+
+	var order_info = await fetch_order_info(oid);
+
+	var resp = {
+		orders: orders,
+		info: order_info,
+		PKEY: PAYSTACK_KEY
+	};
+
+	console.log("Resp: ", resp);
+
+	res.render('checkout', resp);
+
+});
+
 
 
 app.get('/test', async (req, res) => {
@@ -31,11 +80,11 @@ app.get('/test', async (req, res) => {
 	let data = await get_sessions();
 	console.log("DB get: ", data);
 
-	res.send('payment.html');
+	res.render('payment.html');
 
 });
 
-app.get("/formatable", (request, response) => {
+app.get("/formatable", async (request, response) => {
 	
 	clean_db();
   
@@ -43,7 +92,7 @@ app.get("/formatable", (request, response) => {
 });
 
 
-app.get("/drop_table", (request, response) => {
+app.get("/drop_table", async (request, response) => {
 	
 	del_up_table();
   
@@ -115,6 +164,52 @@ app.post('/webhook', async (req, res) => {
 				await send_message(body);
 
 				break;
+
+			case 'checkout':
+
+				let result = await init_checkout(conversation);
+
+				if(result != "none"){
+					let bu = req.protocol+"://"+req.headers.host;
+					var checkout_url = bu+"/checkout/"+result;
+
+					var msg = `
+						By clicking on the link below, you will be redirected to our secure payment portal.
+
+						${checkout_url}
+
+						Reply *home* - for the Main Menu
+					
+					`;
+
+					body = {
+						message: msg,
+						type: 'text' 
+					};
+	
+					body.to_number = conversation;
+					await send_message(body);
+
+				}else{
+
+					var msg = `
+						There are no items in your cart. 
+
+						Reply *home* - for the Main Menu or *Menu* to Place an order					
+					`;
+
+					body = {
+						message: msg,
+						type: 'text' 
+					};
+	
+					body.to_number = conversation;
+					await send_message(body);
+
+				}
+
+				break;
+
 			default:
 				body = { message: 'Echo - ' + text, type: 'text' };
 
