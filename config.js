@@ -1,8 +1,8 @@
 
 const INSTANCE_URL = 'https://api.maytapi.com/api';
-const PRODUCT_ID = '64aaa03f-a134-4d72-afca-50f56ac30b8d';
-const PHONE_ID = '3429';
-const API_TOKEN = '531e4977-d699-4161-839e-c6afc0ddfd80';
+const PRODUCT_ID = '65f6c2b3-5a45-4c38-804b-64b5d6286e4a';
+const PHONE_ID = '3553';
+const API_TOKEN = 'f6a87644-defa-4e72-b2ad-e8ebd39c81c8';
 
 const PAYSTACK_KEY = 'pk_test_232f010e41b15a3b9175d42d2e1eda3b4a317bd0';
 
